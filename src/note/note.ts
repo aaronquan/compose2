@@ -242,7 +242,7 @@ export class RealNote{
     [7, 3], [8, 4], [9, 4], [10, 5], [11, 6], [12, 6], [13, 7],
     [14, 8], [15, 7], [16, 8], [17, 9], [18, 9], [19, 10], [20, 11]
   ]);
-  private static real_notes:CircularArray<RealNote> = RealNote.generateRealNotes(); // todo after .12 change circular array
+  private static real_notes:WebGL.Utils.Array.CircularArray<RealNote> = RealNote.generateRealNotes(); // todo after .12 change circular array
   base_note: RealBaseNote;
   variant: RealBaseNote | null;
   id: RealNoteId;
@@ -253,8 +253,8 @@ export class RealNote{
     this.id = RealNote.getId(note, accidental);
   }
 
-  private static generateRealNotes(): CircularArray<RealNote>{
-    return new CircularArray<RealNote>(RealBaseNote.a_order.map((i) => {
+  private static generateRealNotes(): WebGL.Utils.Array.CircularArray<RealNote>{
+    return new WebGL.Utils.Array.CircularArray<RealNote>(RealBaseNote.a_order.map((i) => {
       const rbn = RealBaseNote.getNoteFromId(i)!;
       return new RealNote(rbn.getNote(), rbn.getAccidental());
     }));
