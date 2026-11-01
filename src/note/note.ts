@@ -2,29 +2,7 @@ import {WebGL} from "webglmusti";
 
 type Int32 = number;
 
-export class CircularArray<T>{
-  private array: T[];
-  constructor(arr: T[]=[]){
-    this.array = arr;
-  }
-
-  length(){
-    return this.array.length;
-  }
-
-  push(e: T){
-    this.array.push(e);
-  }
-
-  get(i: number): T{
-    const count = this.array.length;
-    let index = i % count;
-    if(index < 0){
-      index = count + index;
-    }
-    return this.array[index];
-  }
-}
+type Comparison = -1 | 0 | 1;
 
 export const NoteEnum = {
   A: 0,
@@ -36,7 +14,7 @@ export const NoteEnum = {
   G: 6
 }
 
-type Note = (typeof NoteEnum)[keyof typeof NoteEnum];
+export type Note = (typeof NoteEnum)[keyof typeof NoteEnum];
 
 export const AccidentalEnum = {
   Flat: 0,
@@ -146,6 +124,20 @@ export class NoteUtil{
   static accidentalToString(a: Accidental): string{
     return this.accdental_string_map.get(a)!;
   }
+
+
+  /*add these to RealNoteTone class
+  static numberOfAccidentalsBetweenNotes(n1: RealNoteTone, n2: RealNoteTone): Int32{
+    //todo
+    const cmp = NoteUtil.cmpBaseNote(n1, n2);
+    if(cmp == 0) return 0;
+    
+  }
+
+  static cmpBaseNote(n1: RealNoteTone, n2: RealNoteTone): Comparison{
+    if(n1 === n2) return 0;
+    return n1.getId() > n2.getId() ? 1 : -1;
+  }*/
 }
 
 /*
@@ -187,6 +179,9 @@ class RealBaseNote{
     this.accidental = accidental;
     this.id = RealBaseNote.getId(note, accidental);
   }
+  isNote(n:Note): boolean{
+    return n == this.note;
+  }
 
   getNote(): Note{
     return this.note;
@@ -196,6 +191,10 @@ class RealBaseNote{
   }
   getId(): BaseNoteId{
     return this.id;
+  }
+
+  toString(): string{
+    return `${NoteUtil.noteToString(this.note)}${NoteUtil.accidentalToString(this.accidental)}`;
   }
 
   private static generateBaseNotes(): RealBaseNote[]{
@@ -213,7 +212,7 @@ class RealBaseNote{
     return note*3+accidental as BaseNoteId;
   }
 
-  static getNoteFromId(id: number): RealBaseNote | null{
+  static getNoteFromId(id: Int32): RealBaseNote | null{
     if(id >= RealBaseNote.notes.length) return null;
     return RealBaseNote.notes[id];
   }
@@ -242,7 +241,7 @@ export class RealNote{
     [7, 3], [8, 4], [9, 4], [10, 5], [11, 6], [12, 6], [13, 7],
     [14, 8], [15, 7], [16, 8], [17, 9], [18, 9], [19, 10], [20, 11]
   ]);
-  private static real_notes:WebGL.Utils.Array.CircularArray<RealNote> = RealNote.generateRealNotes(); // todo after .12 change circular array
+  private static real_notes:WebGL.Utils.Array.CircularArray<RealNote> = RealNote.generateRealNotes();
   base_note: RealBaseNote;
   variant: RealBaseNote | null;
   id: RealNoteId;
@@ -253,12 +252,23 @@ export class RealNote{
     this.id = RealNote.getId(note, accidental);
   }
 
+  isNote(n:Note): boolean{
+    return this.base_note.isNote(n);
+  }
+
   private static generateRealNotes(): WebGL.Utils.Array.CircularArray<RealNote>{
     return new WebGL.Utils.Array.CircularArray<RealNote>(RealBaseNote.a_order.map((i) => {
       const rbn = RealBaseNote.getNoteFromId(i)!;
       return new RealNote(rbn.getNote(), rbn.getAccidental());
     }));
 
+  }
+  interval(interval: Int32): RealNote{
+    return RealNote.real_notes.get(this.id+interval);
+  }
+
+  isAccidental(){
+    return this.base_note.getAccidental() != AccidentalEnum.None;
   }
 
   static hasFlat(n: Note): boolean{
@@ -268,7 +278,6 @@ export class RealNote{
   static hasSharp(n: Note): boolean{
     return n == NoteEnum.A || n == NoteEnum.B || n == NoteEnum.D || n == NoteEnum.E || n == NoteEnum.G;
   }
-
 
   getVariant(){
     const n_note = NoteUtil.nextNote(this.base_note.getNote());
@@ -297,7 +306,7 @@ export class RealNote{
     return `${this.base_note.toString()}`;
   }
 
-  static getRealNoteFromId(id:number): RealNote{
+  static getRealNoteFromId(id: Int32): RealNote{
     return RealNote.real_notes.get(id);
   }
 
@@ -310,6 +319,10 @@ export class RealNote{
     const id = RealBaseNote.getId(note, accidental);
     return RealNote.base_note_to_note_id_map.get(id)!;
   }
+  static getRealNote(note: Note, accidental:Accidental){
+    const id = RealNote.getId(note, accidental);
+    return this.getRealNoteFromId(id);
+  }
 }
 
 //https://mixbutton.com/music-tools/frequency-and-pitch/music-note-to-frequency-chart
@@ -317,18 +330,118 @@ export class RealNote{
 //notes C -> D -> E -> F -> G -> A -> B -> C
 
 export class RealNoteTone{
-  static A4_id: Int32 = 48;
+  static note_tones: Map<Int32, RealNoteTone> = RealNoteTone.generateRealNoteTones();
+  static A4_id: Int32 = 57;
+  static AToneFrequency = 440;
   note: RealNote;
-  octave: number;
-  id: number;
-  constructor(rn: RealNote, octave: number){
+  octave: Int32;
+  id: Int32;
+  constructor(rn: RealNote, octave: Int32){
     this.note = rn;
     this.octave = octave;
     this.id = RealNoteTone.getNoteId(rn, octave);
   }
 
-  static getNoteId(real_note: RealNote, octave: number): number{
-    const id = real_note.id - 9 + octave * 12;
+  static getNoteId(real_note: RealNote, octave: Int32): Int32{
+    if(real_note.isNote(NoteEnum.A) || real_note.isNote(NoteEnum.B)){
+      return real_note.id+9  + octave * 12;
+    }
+    const id = real_note.id-3 + octave * 12;
     return id;
+  }
+  static generateRealNoteTones(): Map<Int32, RealNoteTone>{
+    let note = RealNote.getRealNote(NoteEnum.C, AccidentalEnum.None);
+    const note_tones = new Map<Int32, RealNoteTone>();
+    for(let i = 0; i < 88; i++){
+      const octave = Math.floor((i) / 12);
+      note_tones.set(i, new RealNoteTone(note, octave));
+      note = note.interval(1);
+    }
+    return note_tones;
+  }
+  getFrequency(){
+    const freq_mod = this.id-RealNoteTone.A4_id;
+    return RealNoteTone.shiftTone(RealNoteTone.AToneFrequency, freq_mod);
+  }
+  static shiftTone(tone: Int32, shift: Int32):Int32{
+    return tone*Math.pow(2, shift/12);
+  }
+  toString(): string{
+    return `${this.note.toString()}${this.octave}`;
+  }
+
+  distance(note: RealNoteTone): Int32{
+    return Math.abs(note.id - this.id);
+  }
+
+  octaveDistance(note: RealNoteTone): Int32{
+    return Math.floor(this.distance(note)/12);
+  }
+
+  compare(note: RealNoteTone): Comparison{
+    if(note.id == this.id) return 0;
+    return this.id > note.id ? 1 : -1;
+  }
+
+  blackNotesBetween(note: RealNoteTone): Int32{
+    const cmp = this.compare(note);
+    if(cmp == 0) return 0;
+    const octaves = this.octaveDistance(note);
+    let lower: RealNoteTone = RealNoteTone.getNoteToneFromId(this.id+1+octaves*12);
+    let higher: RealNoteTone = note;
+    if(cmp == 1){
+      lower = RealNoteTone.getNoteToneFromId(note.id+1+octaves*12);
+      higher = this;
+    }
+    let blks = 0;
+    while(lower.id < higher.id){
+      if(lower.note.isAccidental()){
+        blks++;
+      }
+      lower = RealNoteTone.getNoteToneFromId(lower.id+1);
+    }
+    return octaves*5 + blks;
+  }
+
+  getNoteWhiteNotesAbove(notes: Int32): RealNoteTone{
+    const octaves = Math.floor(notes/7);
+    const rem = notes % 7;
+    let i = 0;
+    let tone = RealNoteTone.getNoteToneFromId(this.id+octaves*12);
+    while(i < rem){
+      tone = RealNoteTone.getNoteToneFromId(tone.id+1);
+      if(!tone.note.isAccidental()){
+        i++;
+      }
+    }
+    return tone;
+  }
+
+  static getOctaveFromId(id: Int32){
+    return Math.floor(id / 12);
+  }
+
+  private static addNoteTone(id: Int32){
+    const octave = Math.floor(id / 12);
+    const note = RealNote.getRealNote(NoteEnum.A, AccidentalEnum.None).interval(id);
+    RealNoteTone.note_tones.set(id, new RealNoteTone(note, octave));
+  }
+
+  static getNoteToneFromId(id: Int32): RealNoteTone{
+    if(!this.note_tones.has(id)){
+      this.addNoteTone(id);
+    }
+    return this.note_tones.get(id)!;
+  }
+
+  static getNoteToneFromRealNoteAndOctave(rn: RealNote, octave: Int32): RealNoteTone{
+    const id = RealNoteTone.getNoteId(rn, octave);
+    return RealNoteTone.getNoteToneFromId(id);
+  }
+
+  static getNoteToneFromNoteAndOctave(note: Note, acc: Accidental, octave: Int32): RealNoteTone{
+    const real_note = RealNote.getRealNoteFromId(RealNote.getId(note, acc));
+    const id = RealNoteTone.getNoteId(real_note, octave);
+    return RealNoteTone.getNoteToneFromId(id);
   }
 }
